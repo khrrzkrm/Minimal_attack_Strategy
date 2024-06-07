@@ -40,6 +40,7 @@ class Leaf:
 
     def __repr__(self):
         return self.__str__()
+    
 
 class Node:
     def __init__(self, operator, interval, idt):
@@ -60,13 +61,12 @@ class Attack_tree:
         self.root = node
         self.left = left
         self.right = right
-        
-
+    
     def add(self, i):
         new_left = self.left.add(i) if hasattr(self.left, 'add') else self.left + i
         new_right = self.right.add(i) if hasattr(self.right, 'add') else self.right + i
         return Attack_tree(self.root, new_left, new_right)
-    
+
     def is_valid_tree(self, node):
         """
         Recursive function to check if the node is a Leaf or Attack_tree.
@@ -94,14 +94,78 @@ class Attack_tree:
     #         self.right.time_feasible()  
 
     def __repr__(self):
-        return f"({self.root.left} {self.root.operator} {self.root.right} {self.root.interval} {self.root.name})"
+        return f"({self.left} {self.root.operator} {self.right} {self.root.interval} {self.root.name})"
+
+
+def count_leaf_nodes(tree: Attack_tree) -> int:
+        if isinstance(tree, Leaf):
+            return 1
+        elif isinstance(tree, Attack_tree):
+            left_count = count_leaf_nodes(tree.left) if tree.left else 0
+            right_count = count_leaf_nodes(tree.right) if tree.right else 0
+            return left_count + right_count
+        else:
+            return 0
+
+
+def intersect(I1, I2):
+        # Compute the maximum of the lower bounds
+        new_tmin = max(I1.tmin, I2.tmin)
+        # Compute the minimum of the upper bounds
+        new_tmax = min(I1.tmax, I2.tmax)
+        # If the new interval is valid, return it
+        if new_tmin <= new_tmax:
+            return Interval(new_tmin, new_tmax)
+        else:
+            # If there is no intersection, return None
+            return None
+
+
+def propagate(formula: Attack_tree):
+    errors = []
+
+    def helper(subtree):
+        match subtree:
+            case Attack_tree(left=left, root=root, right=right):
+                name = root.name
+                interval = root.interval
+
+                if isinstance(left, Leaf):
+                    if left.duration > (interval.tmax - interval.tmin):
+                        errors.append(f"Leaf node {left.name} duration cannot match the interval of {name}")
+                else:
+                    left_intersect = intersect(interval, left.root.interval)
+                    if left_intersect is None:
+                        errors.append(f"The intersection of {left.root.name} {left.root.interval} and the parent interval {name} {interval} is empty")
+                    else:
+                        left.root.interval = left_intersect
+                        helper(left)
+
+                if isinstance(right, Leaf):
+                    if right.duration > (interval.tmax - interval.tmin):
+                        errors.append(f"Leaf node {right.name} duration cannot match the interval of {name}")
+                else:
+                    right_intersect = intersect(interval, right.root.interval)
+                    if right_intersect is None:
+                        errors.append(f"The intersection of {right.root.name} {right.root.interval} and the parent interval {name} {interval} is empty")
+                    else:
+                        right.root.interval = right_intersect
+                        helper(right)
+
+    helper(formula)
+    
+    if errors:
+        return errors
+    else:
+        return formula
+                
 
 def generate_tikz_code(subtree):
     if isinstance(subtree, Leaf):
         return f"node {{ {subtree.name} \\\\ $\\Delta$={subtree.duration}\\\\cost={subtree.cost} }}"
     elif isinstance(subtree, Attack_tree):
         node=subtree.root
-        operator_label = {'||': 'OR', '&': 'AND', ';': 'SEQ'}[node.operator]
+        operator_label = {'||': 'OR', '&': 'AND', ';': 'SAND'}[node.operator]
         interval_label = f"$[{node.interval.tmin},{node.interval.tmax}]$"
         left_code = generate_tikz_code(subtree.left)
         right_code = generate_tikz_code(subtree.right)
@@ -111,7 +175,7 @@ def generate_tikz_code(subtree):
 def mygen(tree): 
     if isinstance(tree, Attack_tree):
         node=tree.root
-        operator_label = {'||': 'OR', '&': 'AND', ';': 'SEQ'}[node.operator]
+        operator_label = {'||': 'OR', '&': 'AND', ';': 'SAND'}[node.operator]
         interval_label = f"$[{node.interval.tmin},{node.interval.tmax}]$"
         left_code = generate_tikz_code(tree.left)
         right_code = generate_tikz_code(tree.right)
@@ -119,11 +183,9 @@ def mygen(tree):
     else:
         return ""
         
-        
-    
 
 def draw_attack_tree(tree, filename):
-    operator_label = {'||': 'OR', '&': 'AND', ';': 'SEQ'}[tree.root.operator]
+    operator_label = {'||': 'OR', '&': 'AND', ';': 'SAND'}[tree.root.operator]
     interval_label = f"$[{tree.root.interval.tmin},{tree.root.interval.tmax}]$"
     tikz_code = r"""
     \documentclass{standalone}
@@ -149,41 +211,66 @@ def draw_attack_tree(tree, filename):
 
 
 
-# Example usage:
-interval_root = Interval(1, 10)
-interval_left_sub = Interval(2, 8)
-interval_right_sub = Interval(3, 7)
+def boolean_combination_formula(tree):
+    def helper(subtree):
+        if isinstance(subtree, Leaf):
+            return subtree.name
+        elif isinstance(subtree, Attack_tree):
+            left_formula = helper(subtree.left)
+            right_formula = helper(subtree.right)
+            if subtree.root.name == "AND":
+                return f"({left_formula} AND {right_formula})"
+            elif subtree.root.name == "OR":
+                return f"({left_formula} OR {right_formula})"
+        else:
+            return ""
+
+    return helper(tree)
 
 
 Insert_rem=Leaf("IRID",10,100)
 Open_inf=Leaf("OID",2,1)
-Send_virus=Leaf("ASVVI",1,100 )
+Send_virus=Leaf("ASVVI",9,100 )
 Loading_main=Leaf("LMD",1,0 )
-Steal_cert=Leaf("SDC",1,1 )
+Steal_cert=Leaf("SDC",30,30 )
 
-Injectionvia=Node(";",Interval(5,10),"IVRD")
-Infectingac=Node("||",Interval(3,7),"IC")
+Injectionvia=Node(";",Interval(2,9),"IVRD")
+Infectingac=Node("||",Interval(10,17),"IC")
 selfi=Node("&",Interval(10,33),"SI")
 
 Tree_injection= Attack_tree(Injectionvia,Open_inf , Insert_rem)
 Tree_infecting= Attack_tree(Infectingac, Send_virus, Tree_injection)
 Tree_SI= Attack_tree(selfi,Steal_cert,Tree_infecting)
+#draw_attack_tree(Tree_infecting,'IC_conflictdurations')
 
-leaf1 = Leaf("Leaf1", 5, 2000)
-leaf2 = Leaf("Leaf2", 3, 50)
-leaf3 = Leaf("Leaf3", 4, 70)
-leaf4 = Leaf("Leaf4", 2, 30)
-left_sub_tree = Attack_tree(Node("||", interval_left_sub, "OR"), leaf1, leaf2)
-right_sub_tree = Attack_tree(Node(";", interval_right_sub, "SEQ"), leaf3, leaf4)
-
-illformedtree = Attack_tree(Node(";", interval_right_sub, "SEQ"), Node(";", interval_right_sub, "SEQ"), Node(";", interval_right_sub, "SEQ"))
-
-# if illformedtree.is_valid_tree(illformedtree):
-#     print("The tree structure is valid.")
+x=boolean_combination_formula(Tree_SI)
+print(x)
+# Tree_2= propagate(Tree_infecting)
+# if(isinstance(Tree_2,Attack_tree)):
+#     print(Attack_tree)
 # else:
-#     print("The tree structure is not valid.")
+#     for c in Tree_2:
+#         print(c)
+#draw_attack_tree(Tree_2,'tree_in2')
+            
 
-root_tree = Attack_tree(Node("&", interval_root, "Root"), left_sub_tree, right_sub_tree)
-draw_attack_tree(Tree_SI,'SI_tree')
+
+
+# leaf1 = Leaf("Leaf1", 5, 2000)
+# leaf2 = Leaf("Leaf2", 3, 50)
+# leaf3 = Leaf("Leaf3", 4, 70)
+# leaf4 = Leaf("Leaf4", 2, 30)
+# left_sub_tree = Attack_tree(Node("||", interval_left_sub, "OR"), leaf1, leaf2)
+# right_sub_tree = Attack_tree(Node(";", interval_right_sub, "SEQ"), leaf3, leaf4)
+
+# illformedtree = Attack_tree(Node(";", interval_right_sub, "SEQ"), Node(";", interval_right_sub, "SEQ"), Node(";", interval_right_sub, "SEQ"))
+
+# # if illformedtree.is_valid_tree(illformedtree):
+# #     print("The tree structure is valid.")
+# # else:
+# #     print("The tree structure is not valid.")
+
+# root_tree = Attack_tree(Node("&", interval_root, "Root"), left_sub_tree, right_sub_tree)
+# draw_attack_tree(Tree_SI,'SI_tree')
 
 
