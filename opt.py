@@ -32,7 +32,7 @@ def generate_disjoint_constraints(interval1, interval2):
 # Declare the array with fixed length
 
 
-# def LeafToZ3(leaf:Leaf,root:Node,sol:z3.Solver,bound:int)->(z3.Solver):
+# def LeafToZ3(leaf:Leaf,root:Node,opt:z3.Solver,bound:int)->(z3.Solver):
 #     label='pt'+leaf.name
 #     i= Int(label)
 #     event_i= Select(trace, i)
@@ -42,78 +42,76 @@ def generate_disjoint_constraints(interval1, interval2):
 #     clauses = []
 #     for x in range(bound):
 #             clauses.append(And(Z3interval.ti(ttei)>= Z3interval.ti(rootint), Z3interval.ts(ttei)<= Z3interval.ts(rootint), Z3interval.ts(ttei) - Z3interval.ti(ttei)   == leaf.duration, tidt==leaf.name,i==x))
-#     sol.add(And(Z3interval.ti(ttei)>= Z3interval.ti(rootint), Z3interval.ts(ttei)<= Z3interval.ts(rootint), Z3interval.ts(ttei) - Z3interval.ti(ttei)   == leaf.duration, tidt==leaf.name,i<=bound))
-#     return sol
+#     opt.add(And(Z3interval.ti(ttei)>= Z3interval.ti(rootint), Z3interval.ts(ttei)<= Z3interval.ts(rootint), Z3interval.ts(ttei) - Z3interval.ti(ttei)   == leaf.duration, tidt==leaf.name,i<=bound))
+#     return opt
     
 
-def LeafToZ3(leaf:Leaf,root:Node,sol:z3.Solver,bound:int,trace:z3.ArrayRef)->(z3.Solver):
+def LeafToZ3O(leaf:Leaf,root:Node,opt:z3.Solver,bound:int,trace:z3.ArrayRef)->(z3.Optimize):
             label='pt'+leaf.name
             i= Int(label)
             event_i= Select(trace, i)
+            cost = Event.q(event_i)
             ttei = Event.inter(event_i)
             tidt = Event.name(event_i)
-            cost = Event.q(event_i)
+            
             rootint = to_z3interval(root.interval)
             leafcost=leaf.cost
             clauses = []
             for x in range(bound):
                 clauses.append(And(Z3interval.ti(ttei)>= Z3interval.ti(rootint), Z3interval.ts(ttei)<= Z3interval.ts(rootint), Z3interval.ts(ttei) - Z3interval.ti(ttei)   == leaf.duration,cost==leafcost, tidt==leaf.name,i==x))
-            sol.add(Or(clauses))
-            return sol
+            opt.add(Or(clauses))
+            return opt
             # for x in range(bound):
             #     clauses.append(i == x)
-            # sol.add(Or(clauses))
-            # sol.add(And(Z3interval.ti(ttei) >= Z3interval.ti(rootint),
+            # opt.add(Or(clauses))
+            # opt.add(And(Z3interval.ti(ttei) >= Z3interval.ti(rootint),
             # Z3interval.ts(ttei) <= Z3interval.ts(rootint),
             # Z3interval.ts(ttei) - Z3interval.ti(ttei) == leaf.duration,
             # tidt == leaf.name,
             # Sum([If(i == x, 1, 0) for x in range(bound)]) == 1 ))
-            # return sol
+            # return opt
 
-def z3_attack_solver(formula:Attack_tree,bound:Int,trace:z3.ArrayRef) -> (z3.Solver,Int):
-    sol = Solver()
-    cost_sum = Int('cost_sum')
+def z3_attack_optimizer(formula:Attack_tree,bound:Int,trace:z3.ArrayRef) -> (z3.Solver,Int):
+    opt = Optimize()
+    total_cost = Int('total_cost')
+    leaf_costs = []
     match formula:
         case Attack_tree(left=left, root=root, right=right):
             if(isinstance(left,Attack_tree)):
-                sol_l=z3_attack_solver(left,bound,trace)
+                opt_l=z3_attack_optimizer(left,bound,trace)
             elif(isinstance(left,Leaf)):
-                sol_l=Solver()
-                LeafToZ3(left,root,sol_l,bound,trace)
+                opt_l=Optimize()
+                LeafToZ3O(left,root,opt_l,bound,trace)
             if(isinstance(right,Attack_tree)):
-                sol_r=z3_attack_solver(right,bound,trace)
+                opt_r=z3_attack_optimizer(right,bound,trace)
             elif(isinstance(right,Leaf)):
-                sol_r=Solver()
-                LeafToZ3(right,root,sol_r,bound,trace)
+                opt_r=Optimize()
+                LeafToZ3O(right,root,opt_r,bound,trace)
                 
             
             if root.operator=='&':
-                combined_assertions = And(*sol_l.assertions(), *sol_r.assertions())
-                sol.add(combined_assertions)
+                combined_assertions = And(*opt_l.assertions(), *opt_r.assertions())
+                opt.add(combined_assertions)
             elif root.operator=='||':
-                combined_assertions = Or(*sol_l.assertions(), *sol_r.assertions())
-                sol.add(combined_assertions)
+                if len(opt_l.assertions()) == 1 or len(opt_r.assertions()) == 1:
+                    combined_assertions = Xor(opt_l.assertions()[0], opt_r.assertions()[0])
+                elif len(opt_l.assertions()) > 1 or len(opt_r.assertions()) > 1:
+                    combined_assertions = Or(And(*opt_l.assertions()), And(*opt_r.assertions()))
+                else:
+                    raise ValueError("Unexpected number of assertions")
+                opt.add(combined_assertions)
+                #print(combined_assertions)
             else: 
                 print("case not handeled yet")
                 return None
-    # for i in range(bound):
-    #     for j in range(i + 1, bound):
-    #         ttei_i = Event.inter(trace[i])
-    #         ttei_j = Event.inter(trace[j])
-    #         ttb_i = Z3interval.ti(ttei_i)
-    #         ttf_i = Z3interval.ts(ttei_i)
-    #         ttb_j = Z3interval.ti(ttei_j)
-    #         ttf_j = Z3interval.ts(ttei_j)
-    #         disjoint_constraint = Or(ttf_i <= ttb_j, ttf_j <= ttb_i)
-    #       sol.add(disjoint_constraint)
+
     for i in range(bound-1):
         ttei_i = Event.inter(trace[i])
         ttei_j = Event.inter(trace[i+1])
         ttmax = Z3interval.ts(ttei_i)
         ttmin = Z3interval.ti(ttei_j)
-        sol.add(ttmax<=ttmin)
-        
-    return sol
+        opt.add(ttmax<=ttmin)
+    return opt
 
 
 
@@ -122,37 +120,43 @@ def z3_attack_solver(formula:Attack_tree,bound:Int,trace:z3.ArrayRef) -> (z3.Sol
 interval_root = Interval(1, 10)
 interval_left_sub = Interval(2, 8)
 interval_right_sub = Interval(2, 7)
-Insert_rem=Leaf("IRID",5,70)
+Insert_rem=Leaf("IRID",5,10)
 Open_inf=Leaf("OID",4,1)
 Send_virus=Leaf("ASVVI",29,30 )
 Loading_main=Leaf("LMD",1,0 )
 Steal_cert=Leaf("SDC",1,1 )
 
-Injectionvia=Node("||",Interval(5,16),"IVRD")
-Infectingac=Node("&",Interval(3,40),"IC")
+Injectionvia=Node("&",Interval(5,16),"IVRD")
+Infectingac=Node("||",Interval(3,40),"IC")
 selfi=Node("&",Interval(10,200),"SI")
 
 Tree_injection= Attack_tree(Injectionvia,Open_inf , Insert_rem)
 Tree_infecting= Attack_tree(Infectingac, Send_virus, Tree_injection)
 Tree_SI= Attack_tree(selfi,Steal_cert,Tree_infecting)
 
-def synthetize(formula:Attack_tree) -> ():
+def optimize(formula:Attack_tree) -> ():
         trace = Array('trace', IntSort(), Event)
         formula1=propagate(formula)
         if(isinstance(formula1,Attack_tree)):
-            draw_attack_tree(formula1, 'test')
+            #draw_attack_tree(formula1, 'test')
             n=count_leaf_nodes(formula1)
-            print(n)
-            for x in range(0,n+1):
-                print(f"new boud{x}")
+            for x in range(3,n+1):
+                #print(f"new boud{x}")
                 # print(f"new boud{x}")
-                temp_sol=Solver() 
-                temp_sol= z3_attack_solver(formula1,x,trace)
-                for c in temp_sol.assertions(): 
-                    print(c)
-                if temp_sol.check() == sat:
-                    m = temp_sol.model()
-                    print("Satisfiable trace:")
+                temp_opt=Optimize() 
+                temp_opt= z3_attack_optimizer(formula1,x,trace)
+                costs=[]
+                cost_sum = Int('cost_sum')
+                for i in range (x):
+                    event_i= Select(trace, i)
+                    cost = Event.q(event_i)
+                    costs.append(cost)
+                temp_opt.add(cost_sum==Sum(costs))
+                temp_opt.minimize(cost_sum)
+                # for c in temp_opt.assertions(): 
+                #     print(c)
+                if temp_opt.check() == sat:
+                    m = temp_opt.model()
                     cost=0
                     for i in range(x):
                         event = Select(trace, i)
@@ -161,19 +165,21 @@ def synthetize(formula:Attack_tree) -> ():
                         ttb = m.evaluate(Z3interval.ti(interval))
                         ttf = m.evaluate(Z3interval.ts(interval))
                         costl = m.evaluate(Event.q(event))
-                        print(type(costl))
-                        print(f"Event {i}: Node = {idtt}, Start_time = {ttb}, End_time = {ttf},cost={costl}")
-                        cost=cost+costl.as_long()
-                    print(f"the total cost of this attack is {cost}")
-                    return
-            else:
-                print("no solution")
+                        v=0
+                        if ttb.as_long() <= ttf.as_long():
+                          print(f"Event {i}: Node = {idtt}, Start_time = {ttb}, End_time = {ttf}, cost = {costl}")
+                          cost=cost+costl.as_long()
+                          v=v+1
+                    print(f"This is the minimal cost attack of length {x-v}, the total cost: {cost}")
+                    print(f"new length:")
+                    
+                else:
+                    print(F"no solution for {x} ")
         else: 
-            for c in formula1:
-                print(c)
+            print("not a three")
                  
 
-synthetize(Tree_SI)
+optimize(Tree_SI)
             
             
             
