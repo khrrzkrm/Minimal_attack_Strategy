@@ -243,8 +243,8 @@ Tree_infecting= Attack_tree(Infectingac, Send_virus, Tree_injection)
 Tree_SI= Attack_tree(selfi,Steal_cert,Tree_infecting)
 #draw_attack_tree(Tree_infecting,'IC_conflictdurations')
 
-x=boolean_combination_formula(Tree_SI)
-print(x)
+# x=boolean_combination_formula(Tree_SI)
+# print(x)
 # Tree_2= propagate(Tree_infecting)
 # if(isinstance(Tree_2,Attack_tree)):
 #     print(Attack_tree)

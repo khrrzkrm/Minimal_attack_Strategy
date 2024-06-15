@@ -1,97 +1,85 @@
 from z3 import *
 
-# Define the event datatype
+# Define the interval and event datatypes
 Z3interval = Datatype('Interval')
-Z3interval.declare('mk_interval', ('ti', IntSort()), ('ts', IntSort()))
+Z3interval.declare('mk_interval', ('name', StringSort()), ('ti', IntSort()), ('ts', IntSort()))
 Z3interval = Z3interval.create()
 
 Event = Datatype('Event')
 Event.declare('mk_event', ('name', StringSort()), ('inter', Z3interval), ('q', IntSort()))
 Event = Event.create()
 
-trace = Array('trace', IntSort(), Event)
+# Create solver
+solver = Solver()
+solver.set(unsat_core=True)
 
-# Declare the variables
-bound = Int('bound')
-ASVVI_pointer = Int('ASVVI_pointer')
-OID_pointer = Int('OID_pointer')
-IRID_pointer = Int('IRID_pointer')
+# Define variables
+ASVVI = Bool('ASVVI')
+OID = Bool('OID')
+IRID = Bool('IRID')
+IVRD = Bool('IVRD')
+IC = Bool('IC')
+root = Bool('root')
+interval_ASVVI = Z3interval.mk_interval(String('interval_ASVVI'), Int('ti_ASVVI'), Int('ts_ASVVI'))
+interval_OID = Z3interval.mk_interval(String('interval_OID'), Int('ti_OID'), Int('ts_OID'))
+interval_IRID = Z3interval.mk_interval(String('interval_IRID'), Int('ti_IRID'), Int('ts_IRID'))
+ti_ASVVI = Z3interval.ti(interval_ASVVI)
+ts_ASVVI = Z3interval.ts(interval_ASVVI)
+ti_OID = Z3interval.ti(interval_OID)
+ts_OID = Z3interval.ts(interval_OID)
+ti_IRID = Z3interval.ti(interval_IRID)
+ts_IRID = Z3interval.ts(interval_IRID)
 
-# Define the boolean variables
-ASVVI_bool = Bool('ASVVI_bool')
-OID_bool = Bool('OID_bool')
-IRID_bool = Bool('IRID_bool')
+# Add the constraints for ASVVI
+solver.assert_and_track( And(ti_ASVVI >= 3,
+        ts_ASVVI <= 40,
+        ts_ASVVI - ti_ASVVI == 1,
+        Event.q(Event.mk_event(String('ASVVI'), interval_ASVVI, 30)) == 30,
+        Event.name(Event.mk_event(String('ASVVI'), interval_ASVVI, 30)) == String('ASVVI')),ASVVI
+   )
 
-sol = Solver()
+# Add the constraints for OID
+solver.add(Implies(OID, And(ti_OID >= 5,
+        ts_OID <= 16,
+        ts_OID - ti_OID == 9,
+        Event.q(Event.mk_event(String('OID'), interval_OID, 14)) == 14,
+        Event.name(Event.mk_event(String('OID'), interval_OID, 14)) == String('OID'))))
 
-# Group all constraints into one literal
-constraints = And(
-    # Bound constraints
-    And(bound <= 3, bound >= 1),
-    
-    # Non-overlapping constraints for consecutive events
-    ts(inter(trace[0])) <= ti(inter(trace[1])),
-    ts(inter(trace[1])) <= ti(inter(trace[2])),
-    ts(inter(trace[2])) <= ti(inter(trace[3])),
-    
-    # Event constraints for ASVVI with implication
-    Implies(ASVVI_bool, And(
-        ti(inter(trace[ASVVI_pointer])) >= ti(mk_interval(3, 40)),
-        ts(inter(trace[ASVVI_pointer])) <= ts(mk_interval(3, 40)),
-        ts(inter(trace[ASVVI_pointer])) - ti(inter(trace[ASVVI_pointer])) == 29,
-        q(trace[ASVVI_pointer]) == 30,
-        name(trace[ASVVI_pointer]) == "ASVVI",
-        ASVVI_pointer <= bound,
-        ASVVI_pointer >= 0
-    )),
-    
-    # Event constraints for OID with implication
-    Implies(OID_bool, And(
-        ti(inter(trace[OID_pointer])) >= ti(mk_interval(5, 16)),
-        ts(inter(trace[OID_pointer])) <= ts(mk_interval(5, 16)),
-        ts(inter(trace[OID_pointer])) - ti(inter(trace[OID_pointer])) == 4,
-        q(trace[OID_pointer]) == 1,
-        name(trace[OID_pointer]) == "OID",
-        OID_pointer <= bound,
-        OID_pointer >= 0
-    )),
-    
-    # Event constraints for IRID with implication
-    Implies(IRID_bool, And(
-        ti(inter(trace[IRID_pointer])) >= ti(mk_interval(5, 16)),
-        ts(inter(trace[IRID_pointer])) <= ts(mk_interval(5, 16)),
-        ts(inter(trace[IRID_pointer])) - ti(inter(trace[IRID_pointer])) == 5,
-        q(trace[IRID_pointer]) == 70,
-        name(trace[IRID_pointer]) == "IRID",
-        IRID_pointer <= bound,
-        IRID_pointer >= 0
-    )),
-    
-    # Final constraint to connect boolean variables
-    And(ASVVI_bool, And(OID_bool, IRID_bool))
-)
+# Add the constraints for IRID
+solver.add(
+    And(ti_IRID >= 5,
+        ts_IRID <= 16,
+        ts_IRID - ti_IRID == 8,
+        Event.q(Event.mk_event(String('IRID'), interval_IRID, 10)) == 10,
+        Event.name(Event.mk_event(String('IRID'), interval_IRID, 10)) == String('IRID')),IRID)
 
-# Add the combined constraints to the solver
-sol.add(constraints)
+# Add IVRD dependency constraint
+solver.add(Implies(IVRD, And(OID, IRID)))
 
+# Add disjoint constraint for OID and IRID
+solver.assert_and_track(
+    Or(ts_OID <= ti_IRID, ts_IRID <= ti_OID),Bool('Dis(interval_OID, interval_IRID)'))
+
+# Add IC dependency constraint
+solver.add(Implies(IC, Xor(ASVVI, IVRD)))
+
+# Add root dependency constraint
+solver.add(Implies(root, IC))
+
+# Ensure that root is true
+solver.add(root == True)
+
+for c in solver.assertions():
+    print(c)
 # Check satisfiability
-if sol.check() == sat:
-    m = sol.model()
-    print("Satisfiable trace:")
-    cost = 0
-    max_size = 4  # Based on bound constraints
-    for i in range(max_size):
-        if m.eval(Select(trace, i), model_completion=True).decl().kind() != Z3_OP_UNINTERPRETED:
-            event = Select(trace, i)
-            idtt = m.evaluate(Event.name(event))
-            interval = m.evaluate(Event.inter(event))
-            ttb = m.evaluate(Z3interval.ti(interval))
-            ttf = m.evaluate(Z3interval.ts(interval))
-            costl = m.evaluate(Event.q(event))
-            print(f"Event {i}: Node = {idtt}, Start_time = {ttb}, End_time = {ttf}, cost={costl}")
-            cost += costl.as_long()
-        else:
-            break
-    print(f"The total cost of this attack is {cost}")
+if solver.check() == sat:
+    model = solver.model()
+    print("Satisfiable with root true")
+    for d in model.decls():
+        print(f"{d.name()} = {model[d]}")
 else:
-    print("No solution")
+    print("Unsatisfiable with root true")
+    core = solver.unsat_core()
+    print("Unsat core:")
+    for c in core:
+        print(c)
