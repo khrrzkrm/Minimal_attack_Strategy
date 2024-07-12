@@ -1,15 +1,28 @@
-# Project Title
+# Minimal attack strategy:
 
-A brief, catchy description of your project and what it does.
+This project's goal is to reason about vulnerabilities of an information system specified as a Timed attack tree with Costs. 
+Written in Python and using the Z3 solver, the tool computes the feasibility of an attack as well as synthesizes minimal cost models of attacks.
 
-## Description
+## Installation
+Python 3.11.3 or above.
+Z3 library in python:
+```bash
+pip install z3-solver
 
-Provide a more detailed description of your project. Explain the problem it solves, its key features, and any other relevant information.
+Latex:
+```bash
+sudo apt-get install texlive-full
 
-### Features
+## Usage
 
-- Feature 1: Brief explanation
-- Feature 2: Brief explanation
-- Feature 3: Brief explanation
+py .\extended_example.py or
+py .\paper_example.py
 
-### Motivation
+## Features
+- Specifying timed attack trees in attack_struct
+- draw_attack_tree: Draw attack trees as PDF from a specified.
+- Propagate: Propagates the interval from the upper nodes down to the lower nodes, fails when sufficient conflicting definition holds.
+- synthesize: Computes a model of an attack defeating the attack, else returns the subtree that is undefeatable.
+- optimize: Computes the minimal cost attack defeating the attack tree.
+
+
