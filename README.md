@@ -14,10 +14,12 @@ Latex:
 ```
 sudo apt-get install texlive-full
 ```
-## Usage
-
-py .\extended_example.py or
-py .\paper_example.py
+## Example Usage
+```
+py .\extended_example.py
+```
+ or
+```py .\paper_example.py```
 
 ## Features
 - Specifying timed attack trees in attack_struct
