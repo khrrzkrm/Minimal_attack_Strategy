@@ -5,14 +5,15 @@ Written in Python and using the Z3 solver, the tool computes the feasibility of 
 
 ## Installation
 Python 3.11.3 or above.
+
 Z3 library in python:
 ```
 pip install z3-solver
-
+```
 Latex:
 ```
 sudo apt-get install texlive-full
-
+```
 ## Usage
 
 py .\extended_example.py or
