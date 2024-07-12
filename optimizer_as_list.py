@@ -12,7 +12,7 @@ Event = Event.create()
 
 
 
-def LeafToZ3(leaf: Leaf, root: Node, sol: z3.Solver, intervals: set) -> (BoolRef, set):
+def LeafToZ3(leaf: Leaf, root: Node, sol: z3.Solver, intervals: set,costs:list,) -> (BoolRef, set,list):
     inter_i = String('interval_' + leaf.name)
     infi = Int('ti_' + leaf.name)
     supi = Int('ts_' + leaf.name)
@@ -31,30 +31,31 @@ def LeafToZ3(leaf: Leaf, root: Node, sol: z3.Solver, intervals: set) -> (BoolRef
         Event.q(event_i) == leaf.cost,
         Event.name(event_i) == String(leaf.name)
     )))
+    costs.append(If(Bool(leaf.name), leaf.cost, 0))
     
-    return Bool(leaf.name), intervals
+    return Bool(leaf.name), intervals,costs
 
 
     
-def z3_attack_solver(formula:Attack_tree,sol:z3.Solver,intervals:set) -> (BoolRef,set):
+def z3_attack_solver(formula:Attack_tree,sol:z3.Solver,intervals:set,costs:list) -> (BoolRef,set,list):
     match formula:
         case Attack_tree(left=left, root=root, right=right):
             if(isinstance(left,Attack_tree)):
                 #intervals=set()   
-                bool_l,l=z3_attack_solver(left,sol,intervals)
+                bool_l,l,costsl=z3_attack_solver(left,sol,intervals,costs)
             elif(isinstance(left,Leaf)):
                 intervals=set()  
-                bool_l,l=LeafToZ3(left,root,sol,intervals)
+                bool_l,l,costsl=LeafToZ3(left,root,sol,intervals,costs)
             if(isinstance(right,Attack_tree)):
                 #intervals=set()  
-                bool_r,r=z3_attack_solver(right,sol,intervals)
+                bool_r,r,cotsr=z3_attack_solver(right,sol,intervals,costs)
             elif(isinstance(right,Leaf)):
                 intervals=set()  
-                bool_r,r=LeafToZ3(right,root,sol,intervals) 
+                bool_r,r,cotsr=LeafToZ3(right,root,sol,intervals,costs) 
             if root.operator=='&':
                 temp_bool= Bool(root.name)
-                sol.assert_and_track(Implies(temp_bool,And(bool_l, bool_r)),f'Tree {temp_bool} has a timed conflict')
                 #sol.add(Implies(temp_bool,And(bool_l, bool_r)))
+                sol.assert_and_track(Implies(temp_bool,And(bool_l, bool_r)),f'solving{temp_bool}')
                 for i in l:
                     vi, namei = i
                     ti_i = Z3interval.ti(vi)
@@ -66,12 +67,12 @@ def z3_attack_solver(formula:Attack_tree,sol:z3.Solver,intervals:set) -> (BoolRe
                         sol.assert_and_track(Or(ts_i <= ti_j, ts_j <= ti_i),Bool(f"Disjoint({namei},{namej})"))
                     
                 intervals= l | r
-                return temp_bool,intervals
+                return temp_bool,intervals,costs
             elif root.operator=='||':
                 temp_bool= Bool(root.name)
                 sol.add(Implies(temp_bool,Xor(bool_l, bool_r)))
                 intervals= l | r
-                return temp_bool,intervals
+                return temp_bool,intervals,costs
             else: 
                 print("case not handeled yet")
                 return None
@@ -98,24 +99,24 @@ def collect_intervals(model, true_bools):
 
 
 def synthetize(formula:Attack_tree) -> ():
-        formula1=engate(formula)
+        formula1=propagate(formula)
         if(isinstance(formula1,Attack_tree)):
             #draw_attack_tree(formula1, 'test')
             temp_sol=Solver() 
             temp_sol.set(unsat_core=True)
             intervals=set()
-            root_expr,intervals= z3_attack_solver(formula1,temp_sol,intervals)
+            root_expr,intervals,forget= z3_attack_solver(formula1,temp_sol,intervals,[])
             temp_sol.assert_and_track(root_expr,Bool('root'))
             temp_sol.add(Bool('root') == True)
-            for b in temp_sol.assertions():
-                 print(b)
+            # for b in temp_sol.assertions():
+            #      print(b)
             if temp_sol.check() == sat:
                 m = temp_sol.model()
-                print("Solution set up by:")
+                print("Possible attack by model:")
                 tb=get_true_bools(m)
-                #for t in m.decls():
-                #print(m)
-                print("A possible attack trace is:")
+                for t in tb:
+                    print(t)
+                print("Attack Timing is:")
                 solution= collect_intervals(m,tb)
                 for name,i in solution:
                     print(F"{name} assigned to {i}")
@@ -127,32 +128,47 @@ def synthetize(formula:Attack_tree) -> ():
                 for c in core:
                     print(c)
         else:
-            print("the attack tree  has the following problem:")
+            print("the attack tree the following problem:")
             for c in formula1:
-                print(c)            
+                print(c)       
+                
+def optimize(formula:Attack_tree) -> ():
+        formula1=propagate(formula)
+        #draw_attack_tree(formula1, 'test')
+        if(isinstance(formula1,Attack_tree)):
+            temp_sol=Optimize() 
+            intervals=set()
+            root_expr,intervals,costs= z3_attack_solver(formula1,temp_sol,intervals,[])
+            temp_sol.assert_and_track(root_expr,Bool('root'))
+            temp_sol.add(Bool('root') == True)
+            temp_sol.minimize(Sum(costs))
+            #for b in temp_sol.assertions():
+            #    print(b)
+            if temp_sol.check() == sat:
+                m = temp_sol.model()
+                min_cost = m.eval(Sum(costs))
+                print(f"Minimal cost attack has the: {min_cost}")
+                tb=get_true_bools(m)
+                print("Attack Timing is:")
+                # for d in m.decls():
+                #     print(d)
+                solution= collect_intervals(m,tb)
+                for name,i in solution:
+                    print(F"{name} assigned to {i}")
+                
+                
+            elif temp_sol.check() == unsat:
+                core = temp_sol.unsat_core()
+                print(f"Unsat Core is:")
+                for c in core:
+                    print(c)
+        else:
+            print("the attack tree the following problem:")
+            for c in formula1:
+                print(c)                       
                     
                     
 
 
-interval_root = Interval(1, 10)
-interval_left_sub = Interval(2, 8)
-interval_right_sub = Interval(2, 7)
-Insert_rem=Leaf("IRID",2,10)
-Open_inf=Leaf("OID",2,14)
-Send_virus=Leaf("ASVVI",30,300 )
-Loading_main=Leaf("LMD",1,0 )
-Steal_cert=Leaf("SDC",160,1 )
 
-Injectionvia=Node("&",Interval(5,16),"IVRD")
-Infectingac=Node("&",Interval(3,40),"IC")
-selfi=Node("&",Interval(10,200),"SI")
-
-Tree_injection= Attack_tree(Injectionvia,Open_inf , Insert_rem)
-Tree_infecting= Attack_tree(Infectingac, Send_virus, Tree_injection)
-Tree_SI= Attack_tree(selfi,Steal_cert,Tree_infecting)
-
-
-                 
-
-synthetize(Tree_infecting)
         

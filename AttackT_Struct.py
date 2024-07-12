@@ -143,11 +143,11 @@ def propagate(formula: Attack_tree):
 
                 if isinstance(right, Leaf):
                     if right.duration > (interval.tmax - interval.tmin):
-                        errors.append(f"Leaf node {right.name} duration cannot match the interval of {name}")
+                        errors.append(f" Duration conflict: Leaf node {right.name} duration cannot match the interval of {name}")
                 else:
                     right_intersect = intersect(interval, right.root.interval)
                     if right_intersect is None:
-                        errors.append(f"The intersection of {right.root.name} {right.root.interval} and the parent interval {name} {interval} is empty")
+                        errors.append(f"Interval Conflict: The intersection of {right.root.name} {right.root.interval} and the parent interval {name} {interval} is empty")
                     else:
                         right.root.interval = right_intersect
                         helper(right)
