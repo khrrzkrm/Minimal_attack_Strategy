@@ -6,11 +6,11 @@ Written in Python and using the Z3 solver, the tool computes the feasibility of 
 ## Installation
 Python 3.11.3 or above.
 Z3 library in python:
-```bash
+```
 pip install z3-solver
 
 Latex:
-```bash
+```
 sudo apt-get install texlive-full
 
 ## Usage
