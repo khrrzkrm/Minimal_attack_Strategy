@@ -27,8 +27,8 @@ py extended_example.py
 
 ## Features
 - draw_attack_tree: Draw attack trees as PDF from a specified.
-- Propagate: Propagates the interval from the upper nodes down to the lower nodes, fails when sufficient conflicting definition holds.
-- synthesize: Computes a model of an attack defeating the attack, else returns the subtree that is undefeatable.
+- Propagate: Propagates the interval from the upper nodes down to the lower nodes, fails when a sufficient conflicting condition holds.
+- synthesize: Computes a model of an attack defeating the attack, else returns the leaves that are time conflicting with each other.
 - optimize: Computes the minimal cost attack defeating the attack tree.
 
 
