@@ -17,11 +17,11 @@ sudo apt-get install texlive-full
 ## Example Usage
 
 ```
-py .\paper_example.py
+py paper_example.py
 ```
  or
 ```
-py .\extended_example.py
+py extended_example.py
 ```
 
 
