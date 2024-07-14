@@ -1,7 +1,7 @@
 # Minimal attack strategy:
 
 This project's goal is to reason about vulnerabilities of an information system specified as a Timed attack tree with Costs. 
-Written in Python and using the Z3 solver, the tool computes the feasibility of an attack as well as synthesizes minimal cost models of attacks.
+Written in Python and using the Z3 solver, the tool computes the feasibility of an attack as well as synthesizes a minimal-cost model from all possible attack.
 
 ## Installation
 Python 3.11.3 or above.
