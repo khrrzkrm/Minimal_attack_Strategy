@@ -4,11 +4,6 @@ This project's goal is to reason about vulnerabilities of an information system 
 Written in Python and using the Z3 solver, the tool computes the feasibility of an attack as well as synthesizes a minimal-cost model from all possible attacks.
 
 
-$$
-e^{i\pi} + 1 = 0
-$$
-
-
 ## Installation
 Python 3.11.3 or above.
 
@@ -29,6 +24,20 @@ py paper_example.py
 ```
 py extended_example.py
 ```
+
+## Attack tree data structure:
+$$\text{AT} ::=  (\text{Node}, \text{AT}, \text{AT}) \mid \text{Leaf} $$
+
+$$\text{Node} ::=  (idt,\text{gate}, I) $$
+
+$$\text{Leaf} ::=  (idt, \text{cost}, \delta)$$
+
+$$\text{gate} \in  [\text{AND, OR}]$$
+
+$$I ::= [\textsf{Int},\textsf{Int}]$$
+
+$$idt ::= \textsf{String}$$
+
 
 
 ## Features
