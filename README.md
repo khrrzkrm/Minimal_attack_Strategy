@@ -34,9 +34,11 @@ $$\text{Leaf} ::=  (idt, \text{cost}, \delta)$$
 
 $$\text{gate} \in  [\text{AND, OR}]$$
 
-$$I ::= [\textsf{Int},\textsf{Int}]$$
+$$I ::= [\textsf{Int},\textsf{Int}] ~~~~~~~~~~(Interval)$$
 
-$$idt ::= \textsf{String}$$
+$$ \delta ::=  \textsf{Int} ~~~~~~~~~~~~(duration)$$
+
+$$idt ::= \textsf{String} ~~~~~~~~~~(Identifier)$$
 
 
 
