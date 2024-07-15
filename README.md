@@ -3,7 +3,10 @@
 This project's goal is to reason about vulnerabilities of an information system specified as a Timed attack tree with Costs. 
 Written in Python and using the Z3 solver, the tool computes the feasibility of an attack as well as synthesizes a minimal-cost model from all possible attacks.
 
-![Algebraic Tree Definitions](https://latex.codecogs.com/png.latex?\text{AT}%20::=%20&%20(\text{Node},%20\text{AT},%20\text{AT})%20\mid%20\text{Leaf}%20\\%20\text{Node}%20::=%20&%20(idt,\text{gate},%20\mathbb{I})%20\\%20\text{Leaf}%20::=%20&%20(idt,%20\text{cost},%20\delta)\\%20\text{gate}%20\in%20&%20~\{\text{AND,%20OR}\})
+
+$$
+e^{i\pi} + 1 = 0
+$$
 
 
 ## Installation
